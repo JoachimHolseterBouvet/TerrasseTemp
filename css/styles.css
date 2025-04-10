@@ -1,0 +1,39 @@
+body {
+  background: #f8f9fa;
+}
+
+.login-container {
+  max-width: 400px;
+  margin: 100px auto;
+  padding: 30px;
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.dashboard {
+  display: none;
+  margin-top: 40px;
+}
+
+.chart-row {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 30px;
+}
+
+#main,
+#line-chart {
+  width: 600px;
+  height: 400px;
+}
+
+.title-text {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 3rem;
+  font-weight: 700;
+  color: #007bff;
+  margin-bottom: 20px;
+}
