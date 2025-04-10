@@ -90,42 +90,57 @@ export const DashboardPage = {
 
     function scoreCandidate(temp, wind, isSunny) {
       let score = temp;
-      if (isSunny) score += 5;
-      score -= wind * 2;
+      if (isSunny) score += 5; // Sunny bonus
+      score -= wind * 2; // Wind penalty
       return score;
     }
 
+    // --- First loop to find the best candidate (remains the same) ---
     timeElements.forEach((t) => {
       const from = t.getAttribute("from");
       const to = t.getAttribute("to");
       const date = new Date(from);
       const hour = date.getHours();
       const isToday = from.startsWith(today);
-      const isSameHour = from === to;
+      const isSameHour = from === to; // Only consider forecasts for a specific hour, not ranges
 
+      // Check if it's today, within working hours (9-15), and a single-hour forecast
       if (isToday && isSameHour && hour >= 9 && hour <= 15) {
-        console.log(t.outerHTML);
-        console.log(`⏰ Checking ${from} (${hour}h)`);
+        // console.log(t.outerHTML); // Debugging: useful but can be noisy
+        // console.log(`⏰ Checking ${from} (${hour}h)`); // Debugging
         const location = t.querySelector("location");
-        if (!location) return;
+        if (!location) return; // Skip if no location data for this time slot
 
         const tempEl = location.querySelector("temperature");
         const windEl = location.querySelector("windSpeed");
         const symbolEl = location.querySelector("symbol");
+        const cloudEl = location.querySelector("cloudiness"); // Get cloudiness
 
         if (tempEl && windEl) {
-          console.log("✔️ Valid data for hour:", { tempEl, windEl, symbolEl });
+          // Need at least temp and wind
+          // console.log("✔️ Valid data for hour:", { tempEl, windEl, symbolEl }); // Debugging
           const temp = parseFloat(tempEl.getAttribute("value") || "0");
           const wind = parseFloat(windEl.getAttribute("mps") || "0");
           const condition =
-            symbolEl?.getAttribute("code")?.toLowerCase() || "cloudy";
-          const isSunny =
-            condition.includes("clearsky") ||
-            condition.includes("fair") ||
-            condition.includes("partlycloudy");
+            symbolEl?.getAttribute("code")?.toLowerCase() || "unknown"; // Default if missing
+          const cloudiness = parseFloat(
+            cloudEl?.getAttribute("percent") || "0"
+          ); // Get cloudiness value
+
+          // Define 'sunny' based on MET Norway codes (adjust as needed)
+          const isSunny = [
+            "clearsky_day",
+            "fair_day",
+            "partlycloudy_day",
+            // Add more codes if they should count as 'sunny enough'
+          ].some((sunnyCode) => condition.startsWith(sunnyCode));
 
           totalConsidered++;
-          if (condition.includes("rain")) {
+          if (
+            condition.includes("rain") ||
+            condition.includes("sleet") ||
+            condition.includes("snow")
+          ) {
             rainCounter++;
           }
 
@@ -145,17 +160,14 @@ export const DashboardPage = {
               isSunny,
               score,
               condition,
-              cloudiness: parseFloat(
-                location.querySelector("cloudiness")?.getAttribute("percent") ||
-                  "0"
-              ),
+              cloudiness,
             };
           }
         } else {
           console.warn("Missing temperature or wind data for", from);
         }
       }
-    });
+    }); // End of first loop
 
     const rainAllDay = totalConsidered > 0 && rainCounter === totalConsidered;
 
@@ -163,23 +175,44 @@ export const DashboardPage = {
       coffeeMessage.innerHTML = `🌧️ Regn hele dagen, ta kaffepausen inne ☕`;
       coffeeExplanation.textContent = "";
     } else if (bestCandidate) {
+      // Check for high cloudiness *after* finding the best candidate
       const isTooCloudy = bestCandidate.cloudiness >= 95;
+
       if (isTooCloudy) {
-        coffeeMessage.innerHTML = `☁️ Anbefaler ikke kaffepause ute i dag.`;
+        coffeeMessage.innerHTML = `☁️ For overskyet (${bestCandidate.cloudiness.toFixed(
+          0
+        )}%) for utepause. Ta kaffen inne!`;
+        coffeeExplanation.textContent = `Best tid ellers ville vært kl. ${bestCandidate.time} (${bestCandidate.temp}°C, ${bestCandidate.wind} m/s).`;
       } else {
         coffeeMessage.innerHTML = `😎 Anbefalt kaffepause ute kl. <strong>${bestCandidate.time}</strong>`;
+        // Generate explanation (including potential runner-up logic if desired)
+        let reason = `${bestCandidate.time} vurderes som best: ${
+          bestCandidate.temp
+        }°C, ${bestCandidate.wind} m/s vind, ${bestCandidate.cloudiness.toFixed(
+          0
+        )}% skydekke (score: ${bestCandidate.score.toFixed(1)}).`;
+
+        // --- Optional: Runner-up logic (keep or remove based on need) ---
+        // Note: This requires another loop or storing more data in the first loop
+        // If keeping it, integrate it here to add to the 'reason' string.
+        // Example: Find runner-up and add:
+        // if (runnerUp && Math.abs(runnerUp.score - bestCandidate.score) < 1.5) {
+        //   reason += ` ${runnerUp.time} var nesten like bra (${runnerUp.temp}°C, ${runnerUp.wind} m/s).`;
+        // }
+        // --- End Optional Runner-up ---
+
+        coffeeExplanation.textContent = reason;
       }
-      coffeeExplanation.textContent = `${
-        bestCandidate.time
-      } vurderes som best med temperatur på ${bestCandidate.temp}°C, vind på ${
-        bestCandidate.wind
-      } m/s (score: ${bestCandidate.score.toFixed(1)}).`;
+
+      // --- Removed the duplicated isTooCloudy block and message setting from here ---
     } else {
-      coffeeMessage.textContent = "No suitable coffee break time found";
+      // No best candidate found (e.g., no data in the 9-15 range)
+      coffeeMessage.textContent =
+        "Fant ingen passende tid for kaffepause ute i dag.";
       coffeeExplanation.textContent = "";
     }
-    box.style.display = "block";
-  },
+    box.style.display = "block"; // Show the recommendation box
+  }, // End of recommendCoffeeBreak
 
   renderGauge(xmlDoc) {
     const main = document.getElementById("main");
@@ -301,15 +334,23 @@ export const DashboardPage = {
     const windName = wind?.getAttribute("name");
 
     if (windSpeed && windName && windInfo) {
+      const uv = xmlDoc.querySelector("uvIndex");
+      const uvValue = uv?.getAttribute("value");
       const windFormatted = parseFloat(windSpeed).toFixed(1).replace(".", ",");
-      windInfo.textContent = `${windFormatted} m/s – ${windName}`;
-    }
+      const uvText = uvValue ? ` – UV: ${uvValue}` : "";
+      windInfo.textContent = `${windFormatted} m/s – ${windName}${uvText}`;
+      // --- Removed the stray line from here ---
+    } // <--- Added the closing brace back if it was missing, or just ensure the extra line is gone.
 
     const code = symbol?.getAttribute("code");
     if (code && weatherIcon) {
+      // Assuming basePath is correctly defined and imported
+      // Ensure basePath ends with a slash if needed, or adjust the path string
       weatherIcon.src = `${basePath}graphic/weather/svg/${code}.svg`;
     } else if (!code) {
       console.warn("No weather symbol code found");
+    } else if (!weatherIcon) {
+      console.warn("Weather icon element not found"); // Added check for missing element
     }
   },
 
@@ -350,14 +391,44 @@ export const DashboardPage = {
       })
       .then((data) => {
         if (!data.days) throw new Error("No 'days' data in response");
-        const today = new Date().toLocaleDateString("no-NO", {
-          weekday: "long",
-        });
+        const now = new Date();
+        const today = now.toLocaleDateString("no-NO", { weekday: "long" });
+        const hourNow = now.getHours();
+        const isFriday = today.toLowerCase() === "fredag";
+
+        let menuDay = today;
+        if (hourNow >= 13 && !isFriday) {
+          const nextDayIndex = (now.getDay() + 1) % 7;
+          const weekdayNames = [
+            "søndag",
+            "mandag",
+            "tirsdag",
+            "onsdag",
+            "torsdag",
+            "fredag",
+            "lørdag",
+          ];
+          menuDay = weekdayNames[nextDayIndex];
+        }
+
+        if (isFriday && hourNow >= 13) {
+          console.log("📅 It's Friday after 13:00, not showing menu.");
+          const heading = document.querySelector("#menu-of-the-day h3");
+          if (heading) heading.textContent = "";
+          menuContainer.classList.remove("d-none");
+          menuList.innerHTML = `<li class="list-group-item text-muted">God helg! 💃</li>`;
+          return;
+        }
+
         const todayData = data.days.find(
-          (d) => d.day.toLowerCase() === today.toLowerCase()
+          (d) => d.day.toLowerCase() === menuDay.toLowerCase()
         );
 
         if (todayData) {
+          const heading = document.querySelector("#menu-of-the-day h3");
+          if (heading)
+            heading.textContent =
+              hourNow >= 13 ? "Morgendagens meny" : "Dagens meny";
           menuList.innerHTML = ""; // Clear existing
 
           const varmrett = todayData.dishes.find((d) =>
