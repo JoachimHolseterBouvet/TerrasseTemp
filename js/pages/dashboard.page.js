@@ -2,17 +2,38 @@ import { basePath } from "../main.js";
 
 export const DashboardPage = {
   show() {
-    document.getElementById("dashboard").style.display = "block";
+    const dashboard = document.getElementById("dashboard");
+    if (!dashboard) {
+      console.error("Dashboard element not found");
+      return;
+    }
+    dashboard.style.display = "block";
 
-    document.getElementById("logout-button").addEventListener("click", () => {
+    const logoutButton = document.getElementById("logout-button");
+    if (logoutButton) {
+      // Remove existing listener to prevent duplicates
+      logoutButton.removeEventListener("click", handleLogout);
+      logoutButton.addEventListener("click", handleLogout);
+    } else {
+      console.warn("Logout button not found");
+    }
+
+    function handleLogout() {
       DashboardPage.hide();
-      document.getElementById("login-page").style.display = "block";
-      document.getElementById("password").value = "";
-    });
+      const loginPage = document.getElementById("login-page");
+      const passwordField = document.getElementById("password");
+      if (loginPage) loginPage.style.display = "block";
+      if (passwordField) passwordField.value = "";
+    }
   },
 
   hide() {
-    document.getElementById("dashboard").style.display = "none";
+    const dashboard = document.getElementById("dashboard");
+    if (dashboard) {
+      dashboard.style.display = "none";
+    } else {
+      console.warn("Dashboard element not found to hide");
+    }
   },
 
   loadWeather() {
@@ -21,28 +42,58 @@ export const DashboardPage = {
 
     fetch(apiUrl, {
       headers: {
-        "User-Agent": "KontorTemp/1.0",
+        "User-Agent": "KontorTemp/1.0 (+https://example.com)",
       },
     })
-      .then((res) => res.text())
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
+        return res.text();
+      })
       .then((xml) => {
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(xml, "application/xml");
-
+        if (xmlDoc.querySelector("parsererror")) {
+          throw new Error("Invalid XML received");
+        }
         DashboardPage.renderGauge(xmlDoc);
         DashboardPage.renderChart(xmlDoc);
         DashboardPage.renderIcon(xmlDoc);
         DashboardPage.recommendCoffeeBreak(xmlDoc);
       })
-      .catch((err) => console.error("Weather fetch failed:", err));
+      .catch((err) => {
+        console.error("Weather fetch failed:", err);
+        const coffeeMessage = document.getElementById("coffee-message");
+        if (coffeeMessage) {
+          coffeeMessage.textContent = "Could not load weather data";
+        }
+      });
   },
 
   recommendCoffeeBreak(xmlDoc) {
+    console.log("📦 Starting coffee break recommendation");
     const today = new Date().toISOString().split("T")[0];
     const timeElements = Array.from(xmlDoc.querySelectorAll("time"));
-    let bestHour = null;
+    console.log("📆 Time elements found:", timeElements.length);
+    let bestCandidate = null;
+    let bestScore = -Infinity;
+    let rainCounter = 0;
+    let totalConsidered = 0;
 
-    console.log("🔍 Checking conditions for coffee break...");
+    const coffeeMessage = document.getElementById("coffee-message");
+    const coffeeExplanation = document.getElementById("coffee-explanation");
+    const box = document.getElementById("coffee-recommendation");
+
+    if (!coffeeMessage || !coffeeExplanation || !box) {
+      console.error("Coffee recommendation elements missing");
+      return;
+    }
+
+    function scoreCandidate(temp, wind, isSunny) {
+      let score = temp;
+      if (isSunny) score += 5;
+      score -= wind * 2;
+      return score;
+    }
 
     timeElements.forEach((t) => {
       const from = t.getAttribute("from");
@@ -52,70 +103,99 @@ export const DashboardPage = {
       const isToday = from.startsWith(today);
       const isSameHour = from === to;
 
-      const tempEl = t.querySelector("temperature");
-      const windEl = t.querySelector("windSpeed");
-      const symbolEl = t.querySelector("symbol");
+      if (isToday && isSameHour && hour >= 9 && hour <= 15) {
+        console.log(t.outerHTML);
+        console.log(`⏰ Checking ${from} (${hour}h)`);
+        const location = t.querySelector("location");
+        if (!location) return;
 
-      if (
-        isToday &&
-        isSameHour &&
-        hour >= 7 &&
-        hour <= 17 &&
-        tempEl &&
-        windEl &&
-        symbolEl
-      ) {
-        const temp = parseFloat(tempEl.getAttribute("value"));
-        const wind = parseFloat(windEl.getAttribute("mps"));
-        const condition = symbolEl.getAttribute("code");
+        const tempEl = location.querySelector("temperature");
+        const windEl = location.querySelector("windSpeed");
+        const symbolEl = location.querySelector("symbol");
 
-        const isSunny =
-          condition &&
-          (condition.includes("clearsky") ||
+        if (tempEl && windEl) {
+          console.log("✔️ Valid data for hour:", { tempEl, windEl, symbolEl });
+          const temp = parseFloat(tempEl.getAttribute("value") || "0");
+          const wind = parseFloat(windEl.getAttribute("mps") || "0");
+          const condition =
+            symbolEl?.getAttribute("code")?.toLowerCase() || "cloudy";
+          const isSunny =
+            condition.includes("clearsky") ||
             condition.includes("fair") ||
-            condition.includes("partlycloudy"));
-        const timeStr = date.toLocaleTimeString("nb-NO", {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-        });
+            condition.includes("partlycloudy");
 
-        console.log(
-          `🕒 ${timeStr} — temp: ${temp}°C, wind: ${wind} m/s, symbol: ${condition}`
-        );
-        if (!isSunny) console.log("   ⛔ Not sunny");
-        if (temp <= 12) console.log("   ⛔ Temperature not above 12°C");
-        if (wind > 3) console.log("   ⛔ Wind too strong");
+          totalConsidered++;
+          if (condition.includes("rain")) {
+            rainCounter++;
+          }
 
-        if (isSunny && temp > 12 && wind <= 3) {
-          if (!bestHour || temp > bestHour.temp) {
-            bestHour = {
+          const timeStr = date.toLocaleTimeString("nb-NO", {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          });
+
+          const score = scoreCandidate(temp, wind, isSunny);
+          if (score > bestScore) {
+            bestScore = score;
+            bestCandidate = {
               time: timeStr,
               temp,
+              wind,
+              isSunny,
+              score,
+              condition,
+              cloudiness: parseFloat(
+                location.querySelector("cloudiness")?.getAttribute("percent") ||
+                  "0"
+              ),
             };
           }
+        } else {
+          console.warn("Missing temperature or wind data for", from);
         }
       }
     });
 
-    const box = document.getElementById("coffee-recommendation");
-    if (bestHour) {
-      box.innerHTML = `😎 Anbefalt kaffepause ute kl. <strong>${bestHour.time}</strong>`;
-      box.style.display = "block";
-      console.log(
-        `✅ Best recommendation: ${bestHour.time}, ${bestHour.temp}°C`
-      );
+    const rainAllDay = totalConsidered > 0 && rainCounter === totalConsidered;
+
+    if (rainAllDay) {
+      coffeeMessage.innerHTML = `🌧️ Regn hele dagen, ta kaffepausen inne ☕`;
+      coffeeExplanation.textContent = "";
+    } else if (bestCandidate) {
+      const isTooCloudy = bestCandidate.cloudiness >= 95;
+      if (isTooCloudy) {
+        coffeeMessage.innerHTML = `☁️ Anbefaler ikke kaffepause ute i dag.`;
+      } else {
+        coffeeMessage.innerHTML = `😎 Anbefalt kaffepause ute kl. <strong>${bestCandidate.time}</strong>`;
+      }
+      coffeeExplanation.textContent = `${
+        bestCandidate.time
+      } vurderes som best med temperatur på ${bestCandidate.temp}°C, vind på ${
+        bestCandidate.wind
+      } m/s (score: ${bestCandidate.score.toFixed(1)}).`;
     } else {
-      box.style.display = "none";
-      console.log("❌ No suitable time for coffee break today.");
+      coffeeMessage.textContent = "No suitable coffee break time found";
+      coffeeExplanation.textContent = "";
     }
+    box.style.display = "block";
   },
 
   renderGauge(xmlDoc) {
-    const tempEl = xmlDoc.querySelector("location > temperature");
-    const temp = tempEl ? parseFloat(tempEl.getAttribute("value")) : 0;
+    const main = document.getElementById("main");
+    if (!main) {
+      console.error("Chart container 'main' not found");
+      return;
+    }
+    if (typeof echarts === "undefined") {
+      console.error("ECharts library not loaded");
+      return;
+    }
 
-    const chart = echarts.init(document.getElementById("main"));
+    const tempEl = xmlDoc.querySelector("location > temperature");
+    const temp = tempEl ? parseFloat(tempEl.getAttribute("value") || "0") : 0;
+
+    const chart = echarts.init(main);
     chart.setOption({
       series: [
         {
@@ -153,6 +233,16 @@ export const DashboardPage = {
   },
 
   renderChart(xmlDoc) {
+    const lineChart = document.getElementById("line-chart");
+    if (!lineChart) {
+      console.error("Chart container 'line-chart' not found");
+      return;
+    }
+    if (typeof echarts === "undefined") {
+      console.error("ECharts library not loaded");
+      return;
+    }
+
     const today = new Date().toISOString().split("T")[0];
     const points = Array.from(xmlDoc.querySelectorAll("time"))
       .filter((el) => el.getAttribute("from") === el.getAttribute("to"))
@@ -163,7 +253,7 @@ export const DashboardPage = {
       });
 
     const temps = points.map((el) =>
-      parseFloat(el.querySelector("temperature")?.getAttribute("value") || 0)
+      parseFloat(el.querySelector("temperature")?.getAttribute("value") || "0")
     );
     const labels = points.map((el) => {
       const date = new Date(el.getAttribute("from"));
@@ -174,7 +264,7 @@ export const DashboardPage = {
       });
     });
 
-    const chart = echarts.init(document.getElementById("line-chart"));
+    const chart = echarts.init(lineChart);
     chart.setOption({
       color: ["#80FFA5"],
       title: { text: "Dagens temperatur", left: "center" },
@@ -202,30 +292,34 @@ export const DashboardPage = {
   },
 
   renderIcon(xmlDoc) {
+    const weatherIcon = document.getElementById("weather-icon");
+    const windInfo = document.getElementById("wind-info");
+
     const symbol = xmlDoc.querySelector("symbol");
     const wind = xmlDoc.querySelector("windSpeed");
     const windSpeed = wind?.getAttribute("mps");
     const windName = wind?.getAttribute("name");
 
-    const code = symbol?.getAttribute("code");
-
-    if (windSpeed && windName) {
+    if (windSpeed && windName && windInfo) {
       const windFormatted = parseFloat(windSpeed).toFixed(1).replace(".", ",");
-      document.getElementById(
-        "wind-info"
-      ).textContent = `${windFormatted} m/s – ${windName}`;
+      windInfo.textContent = `${windFormatted} m/s – ${windName}`;
     }
 
-    if (code) {
-      document.getElementById(
-        "weather-icon"
-      ).src = `${basePath}graphic/weather/svg/${code}.svg`;
+    const code = symbol?.getAttribute("code");
+    if (code && weatherIcon) {
+      weatherIcon.src = `${basePath}graphic/weather/svg/${code}.svg`;
+    } else if (!code) {
+      console.warn("No weather symbol code found");
     }
   },
 
   setAccessLevel(access) {
     const accessInfo = document.getElementById("access-level-info");
-    accessInfo.textContent = `Access level: ${access.toUpperCase()}`;
+    if (accessInfo) {
+      accessInfo.textContent = `Access level: ${access.toUpperCase()}`;
+    } else {
+      console.warn("Access level info element not found");
+    }
 
     // Optional: unlock features based on access
     if (access === "admin") {
@@ -233,19 +327,29 @@ export const DashboardPage = {
     } else if (access === "level3") {
       // Show medium access content
     }
-    // etc...
   },
 
   loadMenuIfAuthorized(accessLevel) {
     const menuContainer = document.getElementById("menu-of-the-day");
+    const menuList = document.getElementById("menu-list");
+
+    if (!menuContainer || !menuList) {
+      console.error("Menu elements not found");
+      return;
+    }
+
     menuContainer.classList.add("d-none"); // Hide initially
 
     const allowedAccess = ["level1", "level2", "admin"];
     if (!allowedAccess.includes(accessLevel)) return;
 
     fetch("https://i74qu6dp3m.execute-api.us-east-2.amazonaws.com/")
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
+        return res.json();
+      })
       .then((data) => {
+        if (!data.days) throw new Error("No 'days' data in response");
         const today = new Date().toLocaleDateString("no-NO", {
           weekday: "long",
         });
@@ -254,7 +358,6 @@ export const DashboardPage = {
         );
 
         if (todayData) {
-          const menuList = document.getElementById("menu-list");
           menuList.innerHTML = ""; // Clear existing
 
           const varmrett = todayData.dishes.find((d) =>
@@ -279,10 +382,14 @@ export const DashboardPage = {
           }
 
           menuContainer.classList.remove("d-none");
+        } else {
+          console.warn("No menu data for today");
         }
       })
       .catch((err) => {
         console.error("Failed to fetch today's menu:", err);
+        menuContainer.textContent = "Could not load menu";
+        menuContainer.classList.remove("d-none");
       });
   },
 };

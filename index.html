@@ -71,11 +71,25 @@
           />
           <div>
             <p id="wind-info" class="mb-1"></p>
-            <div
-              id="coffee-recommendation"
-              class="fs-5 text-primary"
-              style="display: none"
-            ></div>
+            <div id="coffee-recommendation" class="fs-5 text-primary">
+              <span id="coffee-message"></span>
+              <button
+                class="btn btn-sm btn-outline-secondary ms-2"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#coffee-details"
+                aria-expanded="false"
+                aria-controls="coffee-details"
+              >
+                ?
+              </button>
+              <div class="collapse mt-2" id="coffee-details">
+                <div
+                  class="card card-body text-start"
+                  id="coffee-explanation"
+                ></div>
+              </div>
+            </div>
           </div>
         </div>
         <div class="chart-row">
@@ -93,5 +107,6 @@
       </div>
     </div>
     <script type="module" src="js/main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   </body>
 </html>
