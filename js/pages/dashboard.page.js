@@ -1,3 +1,5 @@
+import { basePath } from "../main.js";
+
 export const DashboardPage = {
   show() {
     document.getElementById("dashboard").style.display = "block";
@@ -217,7 +219,7 @@ export const DashboardPage = {
     if (code) {
       document.getElementById(
         "weather-icon"
-      ).src = `graphic/weather/svg/${code}.svg`;
+      ).src = `${basePath}graphic/weather/svg/${code}.svg`;
     }
   },
 
@@ -238,7 +240,7 @@ export const DashboardPage = {
     const menuContainer = document.getElementById("menu-of-the-day");
     menuContainer.classList.add("d-none"); // Hide initially
 
-    const allowedAccess = ["1", "2", "admin"];
+    const allowedAccess = ["level1", "level2", "admin"];
     if (!allowedAccess.includes(accessLevel)) return;
 
     fetch("https://i74qu6dp3m.execute-api.us-east-2.amazonaws.com/")

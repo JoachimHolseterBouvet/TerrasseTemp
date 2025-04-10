@@ -1,3 +1,5 @@
+import { basePath } from "../main.js";
+
 export const LoginPage = {
   init(onLogin) {
     document.getElementById("login-button").addEventListener("click", () => {
@@ -12,13 +14,6 @@ export const LoginPage = {
         const password = LoginPage.getPassword();
         LoginPage.verifyUser(username, password, onLogin);
       }
-    });
-
-    // 🔹 This is the new part you asked for:
-    document.getElementById("username").addEventListener("input", (e) => {
-      document.getElementById(
-        "login-user-label"
-      ).textContent = `Logging in as: ${e.target.value}`;
     });
   },
 
@@ -45,7 +40,7 @@ export const LoginPage = {
 
   async verifyUser(username, password, onLogin) {
     try {
-      const res = await fetch("/users.json");
+      const res = await fetch(`${basePath}users.json`);
       const users = await res.json();
       const user = users.find(
         (user) => user.username === username && user.password === password
