@@ -1,7 +1,4 @@
 [
   { "username": "admin", "password": "password", "access": "admin" },
-  { "username": "joachim", "password": "1234", "access": "level1" },
-  { "username": "asbjørn", "password": "ilovelandonorris", "access": "level2" },
-  { "username": "øyvind", "password": "flipflops4life", "access": "level2" },
   { "username": "user", "password": "password", "access": "level3" }
 ]

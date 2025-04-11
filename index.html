@@ -52,9 +52,13 @@
       <div class="dashboard" id="dashboard" style="display: none">
         <div class="d-flex justify-content-between align-items-start mt-3 me-3">
           <div class="d-flex flex-column align-items-end">
-            <div id="access-level-info" class="fw-bold text-primary"></div>
-            <div id="dashboard-username" class="text-muted small mb-2"></div>
-            <button class="btn btn-danger" id="logout-button">Sign out</button>
+            <a
+              href="#"
+              id="logout-link"
+              class="text-danger ms-auto me-3 mt-2"
+              style="text-decoration: underline; cursor: pointer"
+              >Logg ut</a
+            >
           </div>
         </div>
         <h1 class="text-center">Bouvet - Kanalpiren</h1>
@@ -71,8 +75,14 @@
           />
           <div>
             <p id="wind-info" class="mb-1"></p>
-            <div id="coffee-recommendation" class="fs-5 text-primary">
-              <span id="coffee-message"></span>
+            <div
+              id="coffee-recommendation"
+              class="fs-5 text-primary"
+              style="display: block"
+            >
+              <span id="coffee-message"
+                >☁️ For kaldt/regn/for mye vind – ta kaffen inne i dag</span
+              >
               <button
                 class="btn btn-sm btn-outline-secondary ms-2"
                 type="button"
@@ -84,10 +94,10 @@
                 ?
               </button>
               <div class="collapse mt-2" id="coffee-details">
-                <div
-                  class="card card-body text-start"
-                  id="coffee-explanation"
-                ></div>
+                <div class="card card-body text-start" id="coffee-explanation">
+                  12:00 is the best candidate, but it's too cold and the wind is
+                  9,3 m/s
+                </div>
               </div>
             </div>
           </div>
@@ -106,7 +116,46 @@
         </div>
       </div>
     </div>
-    <script type="module" src="js/main.js"></script>
+    <div class="mb-3" id="data-source-selector" style="display: none">
+      <label for="data-source" class="form-label fw-bold">Datakilde</label>
+      <select id="data-source" class="form-select w-auto">
+        <option value="live">🌍 Live (API)</option>
+        <option value="test/preset_sunny.xml">😎 Sunny</option>
+        <option value="test/preset_windy.xml">🌬️ Windy</option>
+        <option value="test/preset_cold.xml">🥶 Cold</option>
+        <option value="test/preset_cloudy.xml">☁️ Cloudy</option>
+        <option value="test/preset_mixed.xml">Mixed</option>
+      </select>
+    </div>
+
+    <script type="module">
+      import { DashboardPage } from "./js/pages/dashboard.page.js";
+      import { LoginPage } from "./js/pages/login.page.js";
+
+      LoginPage.init((user) => {
+        LoginPage.hide();
+        DashboardPage.show();
+        DashboardPage.setAccessLevel(user.access);
+        DashboardPage.loadWeather();
+      });
+
+      const dataSourceSelector = document.getElementById("data-source");
+      dataSourceSelector?.addEventListener("change", () => {
+        // ✅ Update global source variable (relied on in dashboard.page.js)
+        window.currentDataSource = dataSourceSelector.value;
+
+        // ✅ Dispose of old charts to prevent ghost visuals
+        const gaugeEl = document.getElementById("main");
+        const chartEl = document.getElementById("line-chart");
+        if (gaugeEl && echarts.getInstanceByDom(gaugeEl))
+          echarts.dispose(gaugeEl);
+        if (chartEl && echarts.getInstanceByDom(chartEl))
+          echarts.dispose(chartEl);
+
+        // ✅ Reload all weather data
+        DashboardPage.loadWeather();
+      });
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   </body>
 </html>
